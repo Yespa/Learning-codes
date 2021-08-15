@@ -86,6 +86,7 @@ def aterrizaje():
         if vehicle.location.global_relative_frame.alt <= 1 * 0.95:
             print("----Aterrizando---")
             break
+        time.sleep(4)
         time.sleep(1)
 
 
