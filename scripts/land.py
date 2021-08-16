@@ -22,7 +22,7 @@ def connectMyCopter():
 
     vehicle = connect(connection_string,baud=baud_rate,wait_ready=True)
 
-    print("Conexión existosa")
+    print("Conexión exitosa")
 
     return vehicle
 
