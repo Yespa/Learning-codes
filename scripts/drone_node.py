@@ -187,7 +187,7 @@ class Node_functions_drone:
                 print("------Altura deseada alcanzada-----")
                 break
             time.sleep(1)
-            
+
 
     #Metodo para enviar comandos de velocidad a la controladora de vuelo en coordenadas absolutas
 
@@ -273,6 +273,25 @@ class Node_functions_drone:
                 time.sleep(1)
 
 
+    #Metodo para realizar un aterrizaje controlado.
+
+    def aterrizaje(self):
+        #Cambiamos al modo aterrizaje
+        
+        self.vehicle.mode = VehicleMode("LAND")
+
+        print("Aterrizando")
+
+        while True:
+            print(" Altura actual: ", self.vehicle.location.global_relative_frame.alt)
+
+            #Verificamos que se mantenga exceda la altura deseada, cuando se cumple salimos de la funcion
+
+            if self.vehicle.location.global_relative_frame.alt <= 1 * 0.95:
+                print("--------Aterrizando-------")
+                break
+            time.sleep(1)
+
 def main():
 
     print("Nodo inicializado........")
@@ -290,13 +309,18 @@ def main():
 
         drone.publish_status_drone()
 
-        if xfa==0:
-            xfa=1
-            drone.condition_yaw(0)
-
         if xfa==1:
+            xfa=2
+            drone.condition_yaw(90)
+
+        if xfa==0:
             xfa = 1
             drone.Vel_mat_rot_Z(1,0,0)
+
+        if xfa==2:
+            xfa = 3
+            drone.Vel_mat_rot_Z(-1,0,0)
+
 
 if __name__ == "__main__":
     main()
