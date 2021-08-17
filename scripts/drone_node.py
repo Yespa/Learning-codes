@@ -15,10 +15,9 @@ import socket
 import math
 import argparse
 
-#from sensor_msgs.msg import NavSatFix
-from geometry_msgs.msg import Point
+from sensor_msgs.msg import NavSatFix
+from geometry_msgs.msg import TwistStamped
 from std_msgs.msg import String
-
 
 
 class Node_functions_drone:
@@ -32,6 +31,7 @@ class Node_functions_drone:
     """
 
     def __init__(self,connection_string,baud_rate):
+        
         ##Realizar la conexion entre la Pixhawk y la Jetson nano
         self.connection_string = connection_string
         self.baud_rate = baud_rate
@@ -40,31 +40,80 @@ class Node_functions_drone:
 
         print("--------------CONEXION EXITOSA-------------------")
 
-        rate = rospy.Rate(10)
+        rate = rospy.Rate(100)
 
         ##Subscriptores
 
         #sub_vel_lin = rospy.Subscriber('drone/vel_lin',String,METODO)
 
-        #Publicadores
+        #PUBLICADORES
 
-        self.pub_pos_gps = rospy.Publisher('drone/pos_gps',Point,queue_size=10)
+        #Publicador de la coordenadas globales actuales de dron
+        self.pub_pos_gps = rospy.Publisher('drone/pos_gps',NavSatFix,queue_size=10)
 
+        #Publicador de la velocidad lineal actual del dron
+        self.pub_vel_now = rospy.Publisher('drone/vel_now',TwistStamped,queue_size=10)
+
+        #Publicador del angulo de orientacion del dron con respecto al norte de la tierra.
+        self.pub_angle_z_now = rospy.Publisher('drone/angle_z_now', String, queue_size=10)
+
+        #Publicador del estado de la bateria actual del dron
+        self.pub_battery_now = rospy.Publisher('drone/battery_now', String, queue_size=10)
+
+        #Publicador de la actitud actual del dron
+        self.pub_attitude_now = rospy.Publisher('drone/attitude_now',String, queue_size=10)
+
+    #METODOS
 
 
     #Metodo para obtener la posicion actual (latitud, longitud y altura)
     def publish_pos_gps(self):
 
+        #Este mensaje tiene una estructura especial es por ellos que se formula de la siguiente manera
+        msg =NavSatFix()
 
-        while not rospy.is_shutdown():
-
-            pos_act_gps_x =  self.vehicle.location.global_relative_frame.lat
-            pos_act_gps_y =  self.vehicle.location.global_relative_frame.lon
-            pos_act_gps_z =  self.vehicle.location.global_relative_frame.alt
-            
-            self.pub_pos_gps.publish(pos_act_gps_x,pos_act_gps_y,pos_act_gps_z)
+        msg.header.stamp = rospy.Time.now()
+        msg.header.frame_id = "drone/Data_GPS"
+        msg.status.status = self.vehicle.gps_0.fix_type #Estado del GPS
+        msg.status.service = self.vehicle.gps_0.satellites_visible #Cantidad de satelites conectados
 
 
+        #Solicito posicion a la pixhawk
+        msg.latitude =  self.vehicle.location.global_relative_frame.lat #Latitud
+        msg.longitude =  self.vehicle.location.global_relative_frame.lon #Longitud
+        msg.altitude =  self.vehicle.location.global_relative_frame.alt #Altura
+        msg.position_covariance = (0,0,0,0,0,0,0,0,0) 
+        msg.position_covariance_type = 0
+
+        #Publico la informacion
+        self.pub_pos_gps.publish(msg)
+
+    #Metodo para publicar variables generales de los sensores del dron
+    def publish_status_drone(self):
+
+        #Se solicita la información a la pixhawk
+        # --> Lleno los vectores de velocidad lineales y angulares
+        
+        vel_now = TwistStamped()
+
+        vel_now.header.stamp = rospy.Time.now()
+        vel_now.header.frame_id = "drone/Velocidades"
+        vel_now.twist.linear.x = self.vehicle.velocity[0]
+        vel_now.twist.linear.x = self.vehicle.velocity[1]
+        vel_now.twist.linear.x = self.vehicle.velocity[2]
+        vel_now.twist.angular.x = 0
+        vel_now.twist.angular.y = 0
+        vel_now.twist.angular.z = 0
+
+
+        angle_z_now = self.vehicle.heading
+        battery_now = self.vehicle.battery
+        attitud_now = self.vehicle.attitude
+
+        self.pub_vel_now.publish(vel_now)
+        #self.pub_angle_z_now.publish(angle_z_now)
+        #self.pub_battery_now.publish(battery_now)
+        #self.pub_attitude_now.publish(attitud_now)
 
 
     #Metodo encargado de realizar el armado y despegue del dron
@@ -113,9 +162,17 @@ def main():
 
     print("Nodo inicializado........")
     rospy.init_node('drone')
-    drone = Node_functions_drone("127.0.0.1:14550",5760)
-    drone.arm_takeoff(10)
-    drone.publish_pos_gps()
+    drone = Node_functions_drone("127.0.0.1:14550",5760)    
+
+    while not rospy.is_shutdown():
+        
+        if drone.vehicle.armed == False:
+        
+            drone.arm_takeoff(10)
+
+
+        drone.publish_pos_gps()
+        drone.publish_status_drone()
 
 if __name__ == "__main__":
     main()
