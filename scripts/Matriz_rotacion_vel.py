@@ -104,7 +104,7 @@ def send_ned_velocity(velocity_x, velocity_y, velocity_z, duration):
 
 
 
-def Matriz_rotacion_Z(Vx,Vy):
+def Vel_mat_rot_Z(Vx,Vy,Vz):
 
 
     grados_act = vehicle.heading
@@ -119,8 +119,9 @@ def Matriz_rotacion_Z(Vx,Vy):
 
     VxP = Vx*cos(grados_act) - Vy*sen(grados_act)
     VyP = Vx*sen(grados_act) + Vy*cos(grados_act)
+    VzP = Vz
 
-    send_ned_velocity(VxP,VyP,0,5)
+    send_ned_velocity(VxP,VyP,VzP,5)
 
 
           
@@ -138,7 +139,7 @@ condition_yaw(360)
 
 time.sleep(2)
 
-Matriz_rotacion_Z(0,1)
+Vel_mat_rot_Z(0,1,0)
 
 time.sleep(5)
 
