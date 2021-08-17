@@ -15,8 +15,8 @@ import socket
 import math
 import argparse
 
-from sensor_msgs.msg import NavSatFix
-from geometry_msgs.msg import TwistStamped
+from sensor_msgs.msg import NavSatFix, BatteryState
+from geometry_msgs.msg import TwistStamped, QuaternionStamped
 from std_msgs.msg import String
 
 
@@ -55,13 +55,13 @@ class Node_functions_drone:
         self.pub_vel_now = rospy.Publisher('drone/vel_now',TwistStamped,queue_size=10)
 
         #Publicador del angulo de orientacion del dron con respecto al norte de la tierra.
-        self.pub_angle_z_now = rospy.Publisher('drone/angle_z_now', String, queue_size=10)
+        self.pub_orient_z_now = rospy.Publisher('drone/orient_z_now', QuaternionStamped, queue_size=10)
 
         #Publicador del estado de la bateria actual del dron
-        self.pub_battery_now = rospy.Publisher('drone/battery_now', String, queue_size=10)
+        self.pub_battery_now = rospy.Publisher('drone/battery_now', BatteryState, queue_size=10)
 
         #Publicador de la actitud actual del dron
-        self.pub_attitude_now = rospy.Publisher('drone/attitude_now',String, queue_size=10)
+        self.pub_attitude_now = rospy.Publisher('drone/attitude_now',QuaternionStamped, queue_size=10)
 
     #METODOS
 
@@ -106,14 +106,45 @@ class Node_functions_drone:
         vel_now.twist.angular.z = 0
 
 
-        angle_z_now = self.vehicle.heading
-        battery_now = self.vehicle.battery
+        #Orientacion actual con respecto al eje z
+        
+        orientacion_z = QuaternionStamped()
+        
+
+        orientacion_z.header.stamp = rospy.Time.now()
+        orientacion_z.header.frame_id = "drone/orientacion"
+        orientacion_z.quaternion.x = 0
+        orientacion_z.quaternion.y = 0
+        orientacion_z.quaternion.z = self.vehicle.heading
+
+        #Estado de la bateria del dron
+
+        battery_now = BatteryState()
+
+        battery_now.header.stamp = rospy.Time.now()
+        battery_now.header.frame_id = "drone/battery"
+        battery_now.voltage = self.vehicle.battery.voltage
+        battery_now.current = self.vehicle.battery.current
+        battery_now.percentage = self.vehicle.battery.level
+
+        #Actitud actual del dron
         attitud_now = self.vehicle.attitude
 
+                
+        attitud_now = QuaternionStamped()
+        
+
+        attitud_now.header.stamp = rospy.Time.now()
+        attitud_now.header.frame_id = "drone/attitud"
+        attitud_now.quaternion.x = self.vehicle.attitude.roll
+        attitud_now.quaternion.y = self.vehicle.attitude.pitch
+        attitud_now.quaternion.z = self.vehicle.attitude.yaw
+
+
         self.pub_vel_now.publish(vel_now)
-        #self.pub_angle_z_now.publish(angle_z_now)
-        #self.pub_battery_now.publish(battery_now)
-        #self.pub_attitude_now.publish(attitud_now)
+        self.pub_orient_z_now.publish(orientacion_z)
+        self.pub_battery_now.publish(battery_now)
+        self.pub_attitude_now.publish(attitud_now)
 
 
     #Metodo encargado de realizar el armado y despegue del dron
