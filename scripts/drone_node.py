@@ -40,7 +40,7 @@ class Node_functions_drone:
 
         print("--------------CONEXION EXITOSA-------------------")
 
-        rate = rospy.Rate(100)
+        rate = rospy.Rate(100)  ## PONER ESTO AFUERA, CREO QUE AQUI NO ESTA HACIENDO NADA
 
         ##Subscriptores
 
@@ -54,13 +54,17 @@ class Node_functions_drone:
         #Publicador de la velocidad lineal actual del dron
         self.pub_vel_now = rospy.Publisher('drone/vel_now',TwistStamped,queue_size=10)
 
-        #Publicador del angulo de orientacion del dron con respecto al norte de la tierra.
-        self.pub_orient_z_now = rospy.Publisher('drone/orient_z_now', QuaternionStamped, queue_size=10)
+        #Publicador del angulo de orientacion del dron con respecto al norte de la tierra. 
+        ## ESTO DEBERIA PUBLICAR NO SOLO LA ORIENTACION SINO LA POSICION CON 6 GRADOS DE LIBERTAD> XYZ Y RPY.
+        ## PUEDE USAR UN MENSAJE GEOMETRY_MSGS::POSESTAMPED O NAV_MSGS::ODOMETRY
+        ## POR AHORA SI QUIERE SOLO LLENE EL CUATERNION
+        self.pub_orient_z_now = rospy.Publisher('drone/orient_z_now', QuaternionStamped, queue_size=10)  
 
         #Publicador del estado de la bateria actual del dron
         self.pub_battery_now = rospy.Publisher('drone/battery_now', BatteryState, queue_size=10)
 
         #Publicador de la actitud actual del dron
+        ## ESTO SE PUEDE INCLUIR EN EL MISMO PUBLISHER DE ARRIBA
         self.pub_attitude_now = rospy.Publisher('drone/attitude_now',QuaternionStamped, queue_size=10)
 
     #METODOS
@@ -113,6 +117,9 @@ class Node_functions_drone:
 
         orientacion_z.header.stamp = rospy.Time.now()
         orientacion_z.header.frame_id = "drone/orientacion"
+        ## LOS CUATERNINONES NO FUNCIONAN ASI. UN CUATERNION ES UN VECTOR UNITARIO QUE EXPRESA UNA ROTACION
+        ## CON RESPECTO A UN EJE ARBITRARIO https://en.wikipedia.org/wiki/Quaternion
+        ## https://en.wikipedia.org/wiki/Conversion_between_quaternions_and_Euler_angles
         orientacion_z.quaternion.x = 0
         orientacion_z.quaternion.y = 0
         orientacion_z.quaternion.z = self.vehicle.heading
@@ -136,6 +143,7 @@ class Node_functions_drone:
 
         attitud_now.header.stamp = rospy.Time.now()
         attitud_now.header.frame_id = "drone/attitud"
+        ## ASI NO FUNCIONAN LOS CUATERNIONES
         attitud_now.quaternion.x = self.vehicle.attitude.roll
         attitud_now.quaternion.y = self.vehicle.attitude.pitch
         attitud_now.quaternion.z = self.vehicle.attitude.yaw
@@ -149,6 +157,7 @@ class Node_functions_drone:
 
     #Metodo encargado de realizar el armado y despegue del dron
 
+    ## EN UN FUTURO ESTE DEBE SER EL CALLBACK DE UN SERVICIO
     def arm_takeoff(self,alt_deseada):
 
         self.vehicle.mode = VehicleMode("GUIDED")
@@ -193,6 +202,7 @@ class Node_functions_drone:
 
     def send_ned_velocity(self,velocity_x, velocity_y, velocity_z, duration):
 
+        ## PONER LA FUENTE DE ESTE CODIGO EN UN COMENTARIO POR SI DESPUES NO SE ACUERDA DE DONDE LO SACO
         msg = self.vehicle.message_factory.set_position_target_local_ned_encode(
             0,       # time_boot_ms (not used)
             0, 0,    # target system, target component
@@ -297,6 +307,7 @@ def main():
     print("Nodo inicializado........")
     rospy.init_node('drone')
     drone = Node_functions_drone("127.0.0.1:14550",5760)    
+    ## EL RATE DEBERIA IR POR AQUI
     xfa=0
     while not rospy.is_shutdown():
         
