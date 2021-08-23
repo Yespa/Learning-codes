@@ -16,7 +16,7 @@ import math
 import argparse
 
 from sensor_msgs.msg import NavSatFix, BatteryState
-from geometry_msgs.msg import TwistStamped, QuaternionStamped
+from geometry_msgs.msg import TwistStamped, QuaternionStamped, PointStamped
 from std_msgs.msg import String
 
 
@@ -31,6 +31,10 @@ class Node_functions_drone:
     """
 
     def __init__(self,connection_string,baud_rate):
+
+        self.Vx = 0
+        self.Vy = 0
+        self.Vz = 0
         
         ##Realizar la conexion entre la Pixhawk y la Jetson nano
         self.connection_string = connection_string
@@ -40,11 +44,10 @@ class Node_functions_drone:
 
         print("--------------CONEXION EXITOSA-------------------")
 
-        rate = rospy.Rate(100)
 
-        ##Subscriptores
+        ##SUBSCRIPTORES
 
-        #sub_vel_lin = rospy.Subscriber('drone/vel_lin',String,METODO)
+        self.sub_vel_nav = rospy.Subscriber('Nav/vel_lin',TwistStamped,self.update_velocity)
 
         #PUBLICADORES
 
@@ -55,15 +58,22 @@ class Node_functions_drone:
         self.pub_vel_now = rospy.Publisher('drone/vel_now',TwistStamped,queue_size=10)
 
         #Publicador del angulo de orientacion del dron con respecto al norte de la tierra.
-        self.pub_orient_z_now = rospy.Publisher('drone/orient_z_now', QuaternionStamped, queue_size=10)
+        self.pub_orient_z_now = rospy.Publisher('drone/orient_z_now', PointStamped, queue_size=10)
 
         #Publicador del estado de la bateria actual del dron
         self.pub_battery_now = rospy.Publisher('drone/battery_now', BatteryState, queue_size=10)
 
         #Publicador de la actitud actual del dron
-        self.pub_attitude_now = rospy.Publisher('drone/attitude_now',QuaternionStamped, queue_size=10)
+        self.pub_orientacion_quaternion = rospy.Publisher('drone/orientacion_quaternion',QuaternionStamped, queue_size=10)
 
     #METODOS
+
+    #Metodo para actualizar la velocidad entregada por el nodo de navegación
+
+    def update_velocity(self,Vel_nav):
+        self.Vx = Vel_nav.twist.linear.x
+        self.Vy = Vel_nav.twist.linear.y
+        self.Vz = Vel_nav.twist.linear.z
 
 
     #Metodo para obtener la posicion actual (latitud, longitud y altura)
@@ -92,32 +102,31 @@ class Node_functions_drone:
     def publish_status_drone(self):
 
         #Se solicita la información a la pixhawk
-        # --> Lleno los vectores de velocidad lineales y angulares
+        # --> VELOCIDADES ACTUALES EL DRON
         
         vel_now = TwistStamped()
 
         vel_now.header.stamp = rospy.Time.now()
         vel_now.header.frame_id = "drone/Velocidades"
         vel_now.twist.linear.x = self.vehicle.velocity[0]
-        vel_now.twist.linear.x = self.vehicle.velocity[1]
-        vel_now.twist.linear.x = self.vehicle.velocity[2]
+        vel_now.twist.linear.y = self.vehicle.velocity[1]
+        vel_now.twist.linear.z = self.vehicle.velocity[2]
         vel_now.twist.angular.x = 0
         vel_now.twist.angular.y = 0
         vel_now.twist.angular.z = 0
 
 
-        #Orientacion actual con respecto al eje z
+        #--> ANGULO EN GRADOS DE LA ROTACION EN EL EJE Z (Respecto al norte)
         
-        orientacion_z = QuaternionStamped()
+        point_ang_z = PointStamped()
         
+        point_ang_z.header.stamp = rospy.Time.now()
+        point_ang_z.header.frame_id = "drone/angle_z"
+        point_ang_z.point.x = 0
+        point_ang_z.point.y = 0
+        point_ang_z.point.z = self.vehicle.heading
 
-        orientacion_z.header.stamp = rospy.Time.now()
-        orientacion_z.header.frame_id = "drone/orientacion"
-        orientacion_z.quaternion.x = 0
-        orientacion_z.quaternion.y = 0
-        orientacion_z.quaternion.z = self.vehicle.heading
-
-        #Estado de la bateria del dron
+        #--> ESTADO DE LA BATERIA DEL DRON
 
         battery_now = BatteryState()
 
@@ -127,24 +136,34 @@ class Node_functions_drone:
         battery_now.current = self.vehicle.battery.current
         battery_now.percentage = self.vehicle.battery.level
 
-        #Actitud actual del dron
-        attitud_now = self.vehicle.attitude
 
-                
+        #--> ACTITUD O ORIENTACION ACTUAL DE DRON
+
+        self.phi = self.vehicle.attitude.roll
+        self.theta = self.vehicle.attitude.pitch
+        self.psi = self.vehicle.attitude.yaw
+
+        # Convertimos los angulos fijos, angulos de euler, a Quaternion para posteriormente publicar la orientacion
+    
+        self.qw = math.cos(self.phi/2) * math.cos(self.theta/2) * math.cos(self.psi/2) + math.sin(self.phi/2) * math.sin(self.theta/2) * math.sin(self.psi/2)
+        self.qx = math.sin(self.phi/2) * math.cos(self.theta/2) * math.cos(self.psi/2) - math.cos(self.phi/2) * math.sin(self.theta/2) * math.sin(self.psi/2)
+        self.qy = math.cos(self.phi/2) * math.sin(self.theta/2) * math.cos(self.psi/2) + math.sin(self.phi/2) * math.cos(self.theta/2) * math.sin(self.psi/2)
+        self.qz = math.cos(self.phi/2) * math.cos(self.theta/2) * math.sin(self.psi/2) - math.sin(self.phi/2) * math.sin(self.theta/2) * math.cos(self.psi/2)
+               
         attitud_now = QuaternionStamped()
         
-
         attitud_now.header.stamp = rospy.Time.now()
-        attitud_now.header.frame_id = "drone/attitud"
-        attitud_now.quaternion.x = self.vehicle.attitude.roll
-        attitud_now.quaternion.y = self.vehicle.attitude.pitch
-        attitud_now.quaternion.z = self.vehicle.attitude.yaw
+        attitud_now.header.frame_id = "drone/Orientacion_quaternion"
 
+        attitud_now.quaternion.x = self.qx
+        attitud_now.quaternion.y = self.qy
+        attitud_now.quaternion.z = self.qz
+        attitud_now.quaternion.w = self.qw
 
         self.pub_vel_now.publish(vel_now)
-        self.pub_orient_z_now.publish(orientacion_z)
+        self.pub_orient_z_now.publish(point_ang_z)
         self.pub_battery_now.publish(battery_now)
-        self.pub_attitude_now.publish(attitud_now)
+        self.pub_orientacion_quaternion.publish(attitud_now)
 
 
     #Metodo encargado de realizar el armado y despegue del dron
@@ -211,8 +230,7 @@ class Node_functions_drone:
 
     #Metodo para convertir las velocidades con coordenadas realtivas a velocidad con coordenadas absolutas
 
-    def Vel_mat_rot_Z(self,Vx,Vy,Vz):
-
+    def Vel_mat_rot_Z(self):
 
         grados_act = self.vehicle.heading
 
@@ -224,9 +242,9 @@ class Node_functions_drone:
             coseno = math.cos(math.radians(grados))
             return coseno
 
-        self.VxP = Vx*cos(grados_act) - Vy*sen(grados_act)
-        self.VyP = Vx*sen(grados_act) + Vy*cos(grados_act)
-        self.VzP = Vz
+        self.VxP = self.Vx*cos(grados_act) - self.Vy*sen(grados_act)
+        self.VyP = self.Vx*sen(grados_act) + self.Vy*cos(grados_act)
+        self.VzP = self.Vz
 
         self.send_ned_velocity(self.VxP,self.VyP,self.VzP,5)
 
@@ -296,8 +314,11 @@ def main():
 
     print("Nodo inicializado........")
     rospy.init_node('drone')
-    drone = Node_functions_drone("127.0.0.1:14550",5760)    
-    xfa=0
+
+    drone = Node_functions_drone("127.0.0.1:14550",5760)
+    rospy.Rate(25)
+
+
     while not rospy.is_shutdown():
         
         if drone.vehicle.armed == False:
@@ -309,20 +330,10 @@ def main():
 
         drone.publish_status_drone()
 
-        if xfa==1:
-            xfa=2
-            drone.condition_yaw(90)
-
-        if xfa==0:
-            xfa = 1
-            drone.Vel_mat_rot_Z(1,0,0)
-
-        if xfa==2:
-            xfa = 3
-            drone.Vel_mat_rot_Z(-1,0,0)
+        drone.Vel_mat_rot_Z()
 
 
 if __name__ == "__main__":
     main()
 
-print("Script muerto")
+print("Script dead")
