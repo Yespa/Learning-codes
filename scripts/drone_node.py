@@ -35,6 +35,7 @@ class Node_functions_drone:
         self.Vx = 0
         self.Vy = 0
         self.Vz = 0
+        self.heading = 0
         
         ##Realizar la conexion entre la Pixhawk y la Jetson nano
         self.connection_string = connection_string
@@ -58,13 +59,13 @@ class Node_functions_drone:
         self.pub_vel_now = rospy.Publisher('drone/vel_now',TwistStamped,queue_size=10)
 
         #Publicador del angulo de orientacion del dron con respecto al norte de la tierra.
-        self.pub_orient_z_now = rospy.Publisher('drone/orient_z_now', PointStamped, queue_size=10)
+        self.pub_orient_angle_z_now = rospy.Publisher('drone/orient_angle_z_now', PointStamped, queue_size=10)
 
         #Publicador del estado de la bateria actual del dron
         self.pub_battery_now = rospy.Publisher('drone/battery_now', BatteryState, queue_size=10)
 
         #Publicador de la actitud actual del dron
-        self.pub_orientacion_quaternion = rospy.Publisher('drone/orientacion_quaternion',QuaternionStamped, queue_size=10)
+        self.pub_orientacion_quaternion = rospy.Publisher('drone/orient_quaternion',QuaternionStamped, queue_size=10)
 
     #METODOS
 
@@ -74,6 +75,7 @@ class Node_functions_drone:
         self.Vx = Vel_nav.twist.linear.x
         self.Vy = Vel_nav.twist.linear.y
         self.Vz = Vel_nav.twist.linear.z
+        self.heading = Vel_nav.twist.angular.z
 
 
     #Metodo para obtener la posicion actual (latitud, longitud y altura)
@@ -144,7 +146,7 @@ class Node_functions_drone:
         self.psi = self.vehicle.attitude.yaw
 
         # Convertimos los angulos fijos, angulos de euler, a Quaternion para posteriormente publicar la orientacion
-    
+                #Conversion de tomada de Meccanimo Complesso https://www.meccanismocomplesso.org/en/hamiltons-quaternions-and-3d-rotation-with-python/
         self.qw = math.cos(self.phi/2) * math.cos(self.theta/2) * math.cos(self.psi/2) + math.sin(self.phi/2) * math.sin(self.theta/2) * math.sin(self.psi/2)
         self.qx = math.sin(self.phi/2) * math.cos(self.theta/2) * math.cos(self.psi/2) - math.cos(self.phi/2) * math.sin(self.theta/2) * math.sin(self.psi/2)
         self.qy = math.cos(self.phi/2) * math.sin(self.theta/2) * math.cos(self.psi/2) + math.sin(self.phi/2) * math.cos(self.theta/2) * math.sin(self.psi/2)
@@ -161,7 +163,7 @@ class Node_functions_drone:
         attitud_now.quaternion.w = self.qw
 
         self.pub_vel_now.publish(vel_now)
-        self.pub_orient_z_now.publish(point_ang_z)
+        self.pub_orient_angle_z_now.publish(point_ang_z)
         self.pub_battery_now.publish(battery_now)
         self.pub_orientacion_quaternion.publish(attitud_now)
 
@@ -210,6 +212,8 @@ class Node_functions_drone:
 
     #Metodo para enviar comandos de velocidad a la controladora de vuelo en coordenadas absolutas
 
+                #Script predeterminado de la libreria de Dronekit. Tomado de la API de dronekit
+
     def send_ned_velocity(self,velocity_x, velocity_y, velocity_z, duration):
 
         msg = self.vehicle.message_factory.set_position_target_local_ned_encode(
@@ -251,7 +255,7 @@ class Node_functions_drone:
 
     #Metodo para realizar la rotacion del dron en el eje Z
 
-    def condition_yaw(self,heading, relative=False):
+    def condition_yaw(self, relative=False):
 
         if relative:
             is_relative = 1 #yaw relative to direction of travel
@@ -262,7 +266,7 @@ class Node_functions_drone:
             0, 0,    # target system, target component
             mavutil.mavlink.MAV_CMD_CONDITION_YAW, #command
             0, #confirmation
-            heading,    # param 1, yaw in degrees
+            self.heading,    # param 1, yaw in degrees
             0,          # param 2, yaw speed deg/s
             1,          # param 3, direction -1 ccw, 1 cw
             is_relative, # param 4, relative offset 1, absolute angle 0
@@ -279,13 +283,13 @@ class Node_functions_drone:
             #Nos metemos en un ciclo hasta que se cumpla el valor de ultima posicion del cabeceo
             #para que la funcion no sea interrumpida por otro comando
 
-            if self.vehicle.heading > heading:
-                if self.vehicle.heading <= heading * 0.95:
+            if self.vehicle.heading > self.heading:
+                if self.vehicle.heading <= self.heading * 0.95:
                     print("------Orientacion deseada alcanzada-----")
                     break
                 time.sleep(1)
             else:
-                if self.vehicle.heading >= heading * 0.95:
+                if self.vehicle.heading >= self.heading * 0.95:
                     print("------Orientacion deseada alcanzada-----")
                     break
                 time.sleep(1)
@@ -315,7 +319,9 @@ def main():
     print("Nodo inicializado........")
     rospy.init_node('drone')
 
-    drone = Node_functions_drone("127.0.0.1:14550",5760)
+    drone = Node_functions_drone("127.0.0.1:14550",5760) 
+
+    #Periodo de muestreo
     rospy.Rate(25)
 
 
@@ -327,6 +333,8 @@ def main():
 
 
         drone.publish_pos_gps()
+
+        #drone.condition_yaw()
 
         drone.publish_status_drone()
 
