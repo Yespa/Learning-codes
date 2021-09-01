@@ -168,9 +168,9 @@ class Node_functions_drone:
         self.pub_orientacion_quaternion.publish(attitud_now)
 
 
-    #Metodo encargado de realizar el armado y despegue del dron
+    #METODO PARA REALIZAR EL ARMADO DE DRON
 
-    def arm_takeoff(self,alt_deseada):
+    def arm_takeoff(self):
 
         self.vehicle.mode = VehicleMode("GUIDED")
            
@@ -193,21 +193,32 @@ class Node_functions_drone:
         ######### Enviamos accion de despegue ##########
         time.sleep(5)
         print("------Despegando-------")
-        self.vehicle.simple_takeoff(alt_deseada)        
 
-        #Mostramos la altura actual y el codigo se detiene hasta que no llegue a la altura deseada, esto se hace
-        #debido a que si se ejecuta otro comando, inmendiatamente se interrumpe la acción anterior.
+    #METODO PARA REALIZAR EL DESPEGUE
+    
+    def takeoff(self,alt_deseada):
+        
+        if self.vehicle.armed == True:
 
-        while True:
-            print(" Altura actual: ", self.vehicle.location.global_relative_frame.alt)
+            self.vehicle.simple_takeoff(alt_deseada)        
 
-            #Verificamos que no exceda la altura deseada, cuando se cumple salimos de la funcion
+            #Mostramos la altura actual y el codigo se detiene hasta que no llegue a la altura deseada, esto se hace
+            #debido a que si se ejecuta otro comando, inmendiatamente se interrumpe la acción anterior.
 
-            if self.vehicle.location.global_relative_frame.alt >= alt_deseada * 0.95:
-                print("")
-                print("------Altura deseada alcanzada-----")
-                break
-            time.sleep(1)
+            while True:
+                print(" Altura actual: ", self.vehicle.location.global_relative_frame.alt)
+
+                #Verificamos que no exceda la altura deseada, cuando se cumple salimos de la funcion
+
+                if self.vehicle.location.global_relative_frame.alt >= alt_deseada * 0.95:
+                    print("")
+                    print("------Altura deseada alcanzada-----")
+                    break
+                time.sleep(1)
+
+        else:
+            self.msg ='Dronenoarmed'
+            print("drone no armado")
 
 
     #Metodo para enviar comandos de velocidad a la controladora de vuelo en coordenadas absolutas

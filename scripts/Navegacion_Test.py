@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-
+from os import killpg
 import rospy
 
 
@@ -23,7 +23,9 @@ class Node_navegation_drone:
         self.longitude_now = 0
         self.latitude_now = 0
         self.altitude_now = 0
-
+        self.heading = 0
+        self.vel_lin_x = 0
+        self.rate = rospy.Rate(10)
         #SUSCRIPTORES
 
         #Suscriptor de la posición actual del drone.
@@ -50,12 +52,12 @@ class Node_navegation_drone:
 
         vel_drone.header.stamp = rospy.Time.now()
         vel_drone.header.frame_id = "Nav/Velocidades"
-        vel_drone.twist.linear.x = 0
+        vel_drone.twist.linear.x = self.vel_lin_x
         vel_drone.twist.linear.y = 0
         vel_drone.twist.linear.z = 0
         vel_drone.twist.angular.x = 0
         vel_drone.twist.angular.y = 0
-        vel_drone.twist.angular.z = 0
+        vel_drone.twist.angular.z = self.heading
 
         self.pub_vel_nav.publish(vel_drone)
 
@@ -71,26 +73,71 @@ class Node_navegation_drone:
 
     #METODO PARA PARA IR A LA COORDENADA INGRESADA.
     def goto(self):
-        
-        latitude_destino = -35.3602602 * 10000
-        longitude_destino = 149.1652347* 10000
+
+        latitude_destino = -35.3632613 * 10000
+        longitude_destino = 149.1654356* 10000
 
         dist_latitude = (latitude_destino - self.latitude_now*10000)  #Distancia variable a recorrer en latitud
         dist_longitude = (longitude_destino - self.longitude_now*10000) #Distancia variabale a recorrer en longitud
         dist_recorrer = math.sqrt(((dist_latitude)**2)+((dist_longitude)**2)) #Distancia más corta entre la latitud y longitud variable
 
-        ang_rotacion = math.degrees(math.atan2(dist_longitude,dist_latitude)) #Angulo del punto de destino
-        #ang_rotacion = math.degrees(math.atan2(dist_latitude,dist_longitude)) #Angulo del punto de destino
+        #Constates de control
+        Kp = 1
+        Ki = 1
+        Kd = 1
 
-        if ang_rotacion < 0:
-            ang_rotacion = ang_rotacion + 360 #Convertir los angulos negativos
+        #Inicializacion de variables para el controlador
+        Acum = 0
+        Ts = 0.5 #Tiempo de muestreo
+        Dist_old = 0
+        time_old = 0        
 
-        self.heading = (ang_rotacion)  
+        while(True):
+   
+            dist_latitude = (latitude_destino - self.latitude_now*10000)  #Distancia variable a recorrer en latitud
+            dist_longitude = (longitude_destino - self.longitude_now*10000) #Distancia variabale a recorrer en longitud
+            dist_recorrer = math.sqrt(((dist_latitude)**2)+((dist_longitude)**2)) #Distancia más corta entre la latitud y longitud variable
 
+            ang_rotacion = math.degrees(math.atan2(dist_longitude,dist_latitude)) #Angulo del punto de destino
 
-        self.publish_velocity()      
+            #Convertir los angulos negativos a positivos
+            if ang_rotacion < 0:
+                ang_rotacion = ang_rotacion + 360 
+            
+            if int(ang_rotacion) in range((int(self.angle_now) - 5),(int(self.angle_now) + 5)): #Condicion para enviar velocidades cuando estemos en la orientacion deseada
 
-        
+                if time.time() - time_old >= Ts: #Controlamos el periodo de muestreo
+
+                    Term_proporcional = dist_recorrer
+                    Term_integrativo = ((dist_recorrer*Ts)-Acum)
+                    Term_derivativo = ((dist_recorrer - Dist_old)/Ts)
+                    
+                    #Ecuacion de controlador PID
+                    Vx = Kp*Term_proporcional + Ki*Term_integrativo + Kd*Term_derivativo
+
+                    #Variables T(k-1)
+                    Acum = Acum + (dist_recorrer*Ts)
+                    Dist_old = dist_recorrer
+                    time_old = time.time()
+                
+                if Vx>3: #Evito un sobre esfuerzo
+                    self.vel_lin_x = 3
+                elif Vx<0: #Evito valores negativos
+                    self.vel_lin_x = 3
+                else: 
+                    self.vel_lin_x = Vx
+
+                self.publish_velocity()      
+
+            
+            else: 
+                self.vel_lin_x = 0
+                self.heading = (ang_rotacion)  
+                self.publish_velocity()      
+                
+            
+            
+                    
 
 def main():
 
@@ -105,7 +152,7 @@ def main():
     while not rospy.is_shutdown():
         
         Navegacion.goto()
-        print(Navegacion.heading)
+    
 
 
 
